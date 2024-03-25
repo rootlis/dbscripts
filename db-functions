@@ -734,7 +734,7 @@ arch_repo_modify() {
 	local arch=$3
 	local pkgs=("${@:4}")
 	local dbfile="${FTP_BASE}/${repo}/os/${arch}/${repo}${DBEXT}"
-	local repo_action_opts=(--quiet)
+	local repo_action_opts=(--quiet --include-sigs)
 
 	if [[ ${action} = remove && ! -f ${dbfile} ]]; then
 		error "No database found at '%s'" "$dbfile"
