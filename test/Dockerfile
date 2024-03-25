@@ -1,6 +1,7 @@
 FROM docker.io/archlinux/archlinux
 
 RUN pacman -Syu --noconfirm --needed \
+		debugedit \
 		sudo \
 		fakeroot \
 		awk \
