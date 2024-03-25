@@ -122,7 +122,7 @@ __buildPackage() {
 	done
 
 	for p in ${pkgfiles[@]}; do
-		sq sign --detached --binary --signer-file /build/private.key --output "${p}.sig" "${p}"
+		rsop sign --no-armor /build/private.tsk > "${p}.sig" < "${p}"
 
 		if [[ -n ${BUILDDIR} ]]; then
 			cp -Lv ${p}{,.sig} ${cache}/
