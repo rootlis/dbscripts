@@ -61,6 +61,8 @@ USER tester
 RUN rsop generate-key "Bob Tester <tester@localhost>" > /build/private.tsk && \
 	rsop extract-cert < /build/private.tsk | sudo pacman-key -a - && \
 	sudo pacman-key --lsign-key tester@localhost && \
+	printf "create ~/.gnupg dir for tester user as otherwise keyboxd is used (which breaks using pacman-key)\n" && \
+	mkdir -vp /build/.gnupg && \
 	gpg --import /build/private.tsk && \
 	gpgconf --kill gpg-agent && \
 	gpgconf --kill keyboxd && \
