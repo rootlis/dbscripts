@@ -1,6 +1,7 @@
 FROM docker.io/archlinux/archlinux
 
 RUN pacman -Syu --noconfirm --needed \
+		debugedit \
 		sudo \
 		fakeroot \
 		awk \
@@ -15,7 +16,7 @@ RUN pacman -Syu --noconfirm --needed \
 		git \
 		parallel \
 		coreutils \
-		sequoia-sq
+		rsop
 
 RUN pacman-key --init && \
 	echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel && \
@@ -57,10 +58,13 @@ RUN pacman-key --init && \
 
 USER tester
 
-RUN sq key generate --userid "Bob Tester <tester@localhost>" --output /build/private.key && \
-	sq cert export --keyring /build/private.key | sudo pacman-key -a - && \
+RUN rsop generate-key "Bob Tester <tester@localhost>" > /build/private.tsk && \
+	rsop extract-cert < /build/private.tsk | sudo pacman-key -a - && \
 	sudo pacman-key --lsign-key tester@localhost && \
-	gpg --import /build/private.key && \
+	printf "create ~/.gnupg dir for tester user as otherwise keyboxd is used (which breaks using pacman-key)\n" && \
+	mkdir -vp /build/.gnupg && \
+	sudo sh -c 'printf "# this option is only needed due to a regression in pacman 6.1\nlock-never\n" >> /etc/pacman.d/gnupg/gpg.conf' && \
+	gpg --import /build/private.tsk && \
 	gpgconf --kill gpg-agent && \
 	gpgconf --kill keyboxd && \
 	mkdir -p \
