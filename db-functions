@@ -88,7 +88,7 @@ acquire_fd() {
 	local fd fd_handle
 
 	# store the resolved path
-	handle=$(realpath -- "${handle}")
+	handle=$(realpath -- "${handle}" 2>/dev/null)
 
 	# try to find open fd for handle
 	for fd in /dev/fd/*; do
