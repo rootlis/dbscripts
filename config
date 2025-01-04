@@ -2,6 +2,7 @@
 
 FTP_BASE="/srv/ftp"
 ARCHIVE_BASE="/srv/archive"
+ARCHIVE_INDEX_URL="https://archive.archlinux.org/packages/.all/index.0.xz"
 ARCHIVEUSER='archive'
 PKGREPOS=()
 DEBUGREPOS=()

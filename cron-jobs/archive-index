@@ -1,0 +1,16 @@
+#!/bin/bash
+set -eo pipefail
+
+. "$(dirname "$(readlink -e "$0")")/../config"
+. /usr/share/makepkg/util.sh
+
+http_code="$(curl --silent --show-error --fail --write-out "%{http_code}" --time-cond "${ARCHIVE_BASE}/index.0" --remote-time --output "${ARCHIVE_BASE}/.index.0.xz" "${ARCHIVE_INDEX_URL}")"
+
+if (( http_code == 200 )); then
+  msg "Updating ${ARCHIVE_BASE}/index.0"
+  rm -f "${ARCHIVE_BASE}/.index.0"
+  xz --decompress --keep "${ARCHIVE_BASE}/.index.0.xz"
+  touch --reference "${ARCHIVE_BASE}/.index.0"{.xz,} --time mtime
+  rm "${ARCHIVE_BASE}/.index.0.xz"
+  mv "${ARCHIVE_BASE}/"{.,}"index.0"
+fi

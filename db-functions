@@ -790,6 +790,11 @@ check_reproducible() {
 		# fast lookup with none glob file exists check using default PKGEXT
 		[[ -f "${FTP_BASE}"/pool/packages/${dependency}${PKGEXT_DEFAULT} ]] && continue
 		[[ -f "${ARCHIVE_BASE}/packages/${pkgname:0:1}/${pkgname}/${dependency}${PKGEXT_DEFAULT}" ]] && continue
+		# the local archive directory contains at most a few
+		# days worth of packages, so the archive index must be
+		# checked for older packages. Both checks are needed as
+		# the archive index is only updated once a day
+		grep --quiet --no-messages --max-count=1 "^${dependency}\$" "${ARCHIVE_BASE}/index.0" && continue
 
 		# fallback lookup in csae fast lookup with default pkgext fails
 		# shellcheck disable=2086
