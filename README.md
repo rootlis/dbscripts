@@ -8,9 +8,7 @@ The executables that you (might) care about are:
 
     dbscripts/
     ├── cron-jobs/
-    │   ├── devlist-mailer
     │   ├── ftpdir-cleanup
-    │   ├── integrity-check
     │   └── sourceballs
     ├── db-move
     ├── db-remove
@@ -39,11 +37,6 @@ lower-level, but you don't want to go all the way down to pacman's
  - `db-repo-add`
  - `db-repo-remove`
 
-Now, we'd like to be able to check that the repos are all OK, so we
-have
-
- - `cron-jobs/integrity-check`
-
 When we remove a package from a repository, it stays in the package
 "pool".  We would like to be able to eventually remove packages from
 the pool, to reclaim the disk space:
@@ -52,7 +45,6 @@ the pool, to reclaim the disk space:
 
 Things that haven't been mentioned yet:
 
- - `cron-jobs/devlist-mailer`
  - `cron-jobs/sourceballs`
 ## Testing
 * Install the `make` and `podman` or `docker` packages depending on your

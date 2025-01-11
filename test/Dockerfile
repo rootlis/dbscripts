@@ -31,9 +31,7 @@ RUN pacman-key --init && \
 	ln -sf /dbscripts/db-repo-remove /usr/local/bin/ && \
 	ln -sf /dbscripts/db-update /usr/local/bin/ && \
 	ln -sf /dbscripts/testing2x /usr/local/bin/ && \
-	ln -sf /dbscripts/cron-jobs/devlist-mailer /usr/local/bin/ && \
 	ln -sf /dbscripts/cron-jobs/ftpdir-cleanup /usr/local/bin/ && \
-	ln -sf /dbscripts/cron-jobs/integrity-check /usr/local/bin/ && \
 	ln -sf /dbscripts/cron-jobs/sourceballs /usr/local/bin/ && \
 	mkdir -p /etc/dbscripts/ && \
 	echo "tester <tester@archlinux.org> tester" > /etc/dbscripts/authors.conf && \
