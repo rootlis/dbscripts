@@ -82,16 +82,17 @@ for repo in "${PKGREPOS[@]}"; do
 
 			# Get the sources from svn
 			mkdir -p -m0770 "${WORKDIR}/pkgbuilds/${repo}-${pkgarch}"
-			export_from_vcs "${pkgbase}" "${pkgver}" "${WORKDIR}/pkgbuilds/${repo}-${pkgarch}/${pkgbase}"
-			if (( $? >= 1 )); then
+
+			if ! export_from_vcs "${pkgbase}" "${pkgver}" "${WORKDIR}/pkgbuilds/${repo}-${pkgarch}/${pkgbase}"; then
 				failedpkgs+=("${pkgbase}-${pkgver}${SRCEXT}")
 				continue
 			fi
 
 			# Build the actual source package
 			pushd "${WORKDIR}/pkgbuilds/${repo}-${pkgarch}/${pkgbase}" >/dev/null
-			makepkg --nocolor --allsource --ignorearch --skippgpcheck --config "${dirname}/makepkg.conf" >"${WORKDIR}/${pkgbase}.log" 2>&1
-			if (( $? == 0 )) && [[ -f ${pkgbase}-${pkgver}${SRCEXT} ]]; then
+
+			if makepkg --nocolor --allsource --ignorearch --skippgpcheck --config "${dirname}/makepkg.conf" >"${WORKDIR}/${pkgbase}.log" 2>&1 \
+					&& [[ -f ${pkgbase}-${pkgver}${SRCEXT} ]]; then
 				mv_acl "${pkgbase}-${pkgver}${SRCEXT}" "${FTP_BASE}/${SRCPOOL}/${pkgbase}-${pkgver}${SRCEXT}"
 				# Avoid creating the same source package for every arch
 				echo "${pkgbase}-${pkgver}${SRCEXT}" >> "${WORKDIR}/available-src-pkgs"
