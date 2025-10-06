@@ -9,7 +9,7 @@ shopt -s nullglob
 colorize
 
 if (( $# < 3 )); then
-	msg "usage: %s <repo-from> <repo-to> <pkgname|pkgbase> ..." "${0##*/}"
+	msg "usage: %s <repo-from> <repo-to> <pkgname> ..." "${0##*/}"
 	exit 1
 fi
 
@@ -22,8 +22,8 @@ ftppath_to="${FTP_BASE}/${repo_to}/os/"
 ftppath_debug_to="${FTP_BASE}/${repo_to}-debug/os/"
 
 # filter out duplicates
-pkgbases=("${args[@]:2}")
-mapfile -t pkgbases < <(printf '%s\n' "${pkgbases[@]}" | sort --unique)
+pkgnames=("${args[@]:2}")
+mapfile -t pkgnames < <(printf '%s\n' "${pkgnames[@]}" | sort --unique)
 
 
 check_leapfrog=false
@@ -51,56 +51,44 @@ for pkgarch in "${ARCHES[@]}"; do
 	repo_lock "${repo_from}" "${pkgarch}"
 done
 
-# check if packages to be moved exist in version control and ftp dir
-for pkgbase in "${pkgbases[@]}"; do
+# check if packages to be moved exist in ftp dir
+for pkgname in "${pkgnames[@]}"; do
 	found=false
 	for pkgarch in "${ARCHES[@]}"; do
-		if vcsrepo_from=$(find_repo_for_package "${pkgbase}" "${pkgarch}" "${repo_from}"); then
-			if ! _pkgver=$(pkgver_from_state_repo "${pkgbase}" "${vcsrepo_from}"); then
-				die "%s has no pkgver entry in %s" "${pkgbase}" "${vcsrepo_from}"
-			fi
-			if ! git_tag_exists "${pkgbase}" "${_pkgver}" && ! fetch_pkgbuild "${pkgbase}"; then
-				die "Couldn't find package %s in git!" "${pkgbase}"
-			fi
-			mapfile -t result < <(source_pkgbuild "${pkgbase}" "${_pkgver}"; \
-				get_full_version; echo "${pkgname[@]}")
-			pkgver="${result[0]}"
-			read -ra pkgnames <<<"${result[1]}"
-			if (( ${#pkgnames[@]} < 1 )); then
-				die "Could not read pkgname"
+		if vcsrepo_from=$(find_repo_for_package "${pkgname}" "${pkgarch}" "${repo_from}"); then
+			if ! pkgver=$(pkgver_from_state_repo "${pkgname}" "${vcsrepo_from}"); then
+				die "%s has no pkgver entry in %s" "${pkgname}" "${vcsrepo_from}"
 			fi
 
 			if [[ -z ${pkgver} ]]; then
 				die "Could not read pkgver"
 			fi
 
-			if [[ ${check_leapfrog} = true ]] && leapfrog=$(find_repo_for_package "${pkgbase}" "${pkgarch}" "${TESTING_REPOS[@]}"); then
-				die "Package %s cannot be moved from %s to %s while it exists in %s" "${pkgbase}" "${repo_from}" "${repo_to}" "${leapfrog}"
+			if [[ ${check_leapfrog} = true ]] && leapfrog=$(find_repo_for_package "${pkgname}" "${pkgarch}" "${TESTING_REPOS[@]}"); then
+				die "Package %s cannot be moved from %s to %s while it exists in %s" "${pkgname}" "${repo_from}" "${repo_to}" "${leapfrog}"
 			fi
 
-			for pkgname in "${pkgnames[@]}"; do
-				getpkgfile "${ftppath_from}/${pkgarch}/${pkgname}-${pkgver}-${vcsrepo_from##*-}"${PKGEXTS} >/dev/null
-			done
+			getpkgfile "${ftppath_from}/${pkgarch}/${pkgname}-${pkgver}-${vcsrepo_from##*-}"${PKGEXTS} >/dev/null
 			found=true
 			continue 2
 		fi
 	done
-	[[ ${found} = true ]] || die "%s not found in %s" "$pkgbase" "$repo_from"
+	[[ ${found} = true ]] || die "%s not found in %s" "$pkgname" "$repo_from"
 done
 
 msg "Moving packages from [%s] to [%s]..." "$repo_from" "$repo_to"
 
-declare -A pkgbase_arches=()
+declare -A pkgname_arches=()
 for arch in "${ARCHES[@]}"; do
 	declare -a add_pkgs_$arch
 	declare -a add_debug_pkgs_$arch
 	declare -a remove_pkgs_$arch
 	declare -a remove_debug_pkgs_$arch
 done
-for pkgbase in "${pkgbases[@]}"; do
+for pkgname in "${pkgnames[@]}"; do
 	tag_list=""
 	for pkgarch in "${ARCHES[@]}" 'any'; do
-		if ! vcsrepo_from=$(find_repo_for_package "${pkgbase}" "${pkgarch}" "${repo_from}"); then
+		if ! vcsrepo_from=$(find_repo_for_package "${pkgname}" "${pkgarch}" "${repo_from}"); then
 			continue
 		fi
 
@@ -110,46 +98,41 @@ for pkgbase in "${pkgbases[@]}"; do
 			else
 				tarches=("${pkgarch}")
 			fi
-			msg2 "%s (%s)" "$pkgbase" "${tarches[*]}"
-			if ! _pkgver=$(pkgver_from_state_repo "${pkgbase}" "${vcsrepo_from}"); then
-				die "%s has no entry in %s" "${pkgbase}" "${vcsrepo_from}"
+			msg2 "%s (%s)" "$pkgname" "${tarches[*]}"
+			if ! pkgver=$(pkgver_from_state_repo "${pkgname}" "${vcsrepo_from}"); then
+				die "%s has no entry in %s" "${pkgname}" "${vcsrepo_from}"
 			fi
-			mapfile -t result < <(source_pkgbuild "${pkgbase}" "${_pkgver}"; \
-			    get_full_version; echo "${pkgname[@]}")
-			pkgver="${result[0]}"
-			read -ra pkgnames <<<"${result[1]}"
 
 			tag_list+=", $pkgarch"
-			pkgbase_arches[$pkgbase]+="$pkgarch "
+			pkgname_arches[$pkgname]+="$pkgarch "
 
 			for tarch in "${tarches[@]}"; do
 				declare -n add_pkgs="add_pkgs_${tarch}"
 				declare -n add_debug_pkgs="add_debug_pkgs_${tarch}"
 				declare -n remove_pkgs="remove_pkgs_${tarch}"
 				declare -n remove_debug_pkgs="remove_debug_pkgs_${tarch}"
-				for pkgname in "${pkgnames[@]}"; do
-					pkgpath=$(getpkgfile "${ftppath_from}/${tarch}/${pkgname}-${pkgver}-${pkgarch}"${PKGEXTS})
-					pkgfile="${pkgpath##*/}"
 
-					ln -sf "../../../${PKGPOOL}/${pkgfile}" "${ftppath_to}/${tarch}/"
-					if [[ -f ${FTP_BASE}/${PKGPOOL}/${pkgfile}.sig ]]; then
-						ln -sf "../../../${PKGPOOL}/${pkgfile}.sig" "${ftppath_to}/${tarch}/"
-					fi
-					add_pkgs+=("${FTP_BASE}/${PKGPOOL}/${pkgfile}")
-					remove_pkgs+=("${pkgname}")
-				done
+				pkgpath=$(getpkgfile "${ftppath_from}/${tarch}/${pkgname}-${pkgver}-${pkgarch}"${PKGEXTS})
+				pkgfile="${pkgpath##*/}"
 
-				if ! debug_pkgpath=$(maybe_getpkgfile "${ftppath_debug_from}/${tarch}/${pkgbase}-debug-${pkgver}-${pkgarch}"${PKGEXTS}); then
+				ln -sf "../../../${PKGPOOL}/${pkgfile}" "${ftppath_to}/${tarch}/"
+				if [[ -f ${FTP_BASE}/${PKGPOOL}/${pkgfile}.sig ]]; then
+					ln -sf "../../../${PKGPOOL}/${pkgfile}.sig" "${ftppath_to}/${tarch}/"
+				fi
+				add_pkgs+=("${FTP_BASE}/${PKGPOOL}/${pkgfile}")
+				remove_pkgs+=("${pkgname}")
+
+				if ! debug_pkgpath=$(maybe_getpkgfile "${ftppath_debug_from}/${tarch}/${pkgname}-debug-${pkgver}-${pkgarch}"${PKGEXTS}); then
 					continue
 				fi
 				debug_pkgfile="${debug_pkgpath##*/}"
-				msg2 "Found debug package %s (%s)" "${pkgbase}-debug" "${tarch}"
+				msg2 "Found debug package %s (%s)" "${pkgname}-debug" "${tarch}"
 				ln -sf "../../../${DEBUGPKGPOOL}/${debug_pkgfile}" "${ftppath_debug_to}/${tarch}/"
 				if [[ -f ${FTP_BASE}/${DEBUGPKGPOOL}/${debug_pkgfile}.sig ]]; then
 					ln -sf "../../../${DEBUGPKGPOOL}/${debug_pkgfile}.sig" "${ftppath_debug_to}/${tarch}/"
 				fi
 				add_debug_pkgs+=("${FTP_BASE}/${DEBUGPKGPOOL}/${debug_pkgfile}")
-				remove_debug_pkgs+=("${pkgbase}-debug")
+				remove_debug_pkgs+=("${pkgname}-debug")
 			done
 		fi
 	done
@@ -174,11 +157,11 @@ done
 # Only modify repository if everything else has been done
 # We really don't want it to represent a broken state
 if ((REPO_MODIFIED)); then
-	for pkgbase in "${pkgbases[@]}"; do
-		read -r -a tarches <<< "${pkgbase_arches[${pkgbase}]}"
+	for pkgname in "${pkgnames[@]}"; do
+		read -r -a tarches <<< "${pkgname_arches[${pkgname}]}"
 		for tarch in "${tarches[@]}"; do
-			if ! vcs_move_package "${pkgbase}" "${repo_from}-${tarch}" "${repo_to}-${tarch}"; then
-				die "Couldn't move %s from %s to %s" "${pkgbase}" "${repo_from}" "${repo_to}"
+			if ! vcs_move_package "${pkgname}" "${repo_from}-${tarch}" "${repo_to}-${tarch}"; then
+				die "Couldn't move %s from %s to %s" "${pkgname}" "${repo_from}" "${repo_to}"
 			fi
 		done
 	done
