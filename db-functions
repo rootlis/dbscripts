@@ -622,20 +622,19 @@ check_stagingrepos() {
 
 	local repo package_repos required_repo required_repos=()
 	local staged_packages staged_pkgfile staged_pkgname
-	local pkgbase pkgname pkgarch
+	local pkgname pkgarch
 
-	pkgbase=$(getpkgbase "${pkgfile}")
 	pkgname=$(getpkgname "${pkgfile}")
 	pkgarch=$(getpkgarch "${pkgfile}")
 
 	# check if testing is required for stable
 	if in_array "${pkgrepo}" "${STABLE_REPOS[@]}"; then
-		mapfile -t package_repos < <(find_repo_for_package "${pkgbase}" "${pkgarch}" "${TESTING_REPOS[@]}")
+		mapfile -t package_repos < <(find_repo_for_package "${pkgname}" "${pkgarch}" "${TESTING_REPOS[@]}")
 		required_repos+=("${package_repos[@]}")
 	fi
 	# check if staging is required for stable,testing
 	if in_array "${pkgrepo}" "${STABLE_REPOS[@]}" "${TESTING_REPOS[@]}"; then
-		mapfile -t package_repos < <(find_repo_for_package "${pkgbase}" "${pkgarch}" "${STAGING_REPOS[@]}")
+		mapfile -t package_repos < <(find_repo_for_package "${pkgname}" "${pkgarch}" "${STAGING_REPOS[@]}")
 		required_repos+=("${package_repos[@]}")
 	fi
 
@@ -907,10 +906,10 @@ get_stability_layer_between() {
 check_package_is_newer_than_repo() {
 	local pkgfile=$1
 	local repo=$2
-	local pkgbase pkgarch pkgver
+	local pkgname pkgarch pkgver
 	local pkgver_repo vercmp_result
 
-	if ! pkgbase=$(getpkgbase "${pkgfile}") || \
+	if ! pkgname=$(getpkgname "${pkgfile}") || \
 			! pkgarch=$(getpkgarch "${pkgfile}") || \
 			!  pkgver=$(getpkgver "${pkgfile}"); then
 		error "Package %s has invalid metadata" "${pkgfile}"
@@ -918,7 +917,7 @@ check_package_is_newer_than_repo() {
 	fi
 
 	# it is okay if package does not exist in the current repo
-	if ! pkgver_repo=$(pkgver_from_state_repo "${pkgbase}" "${repo}-${pkgarch}"); then
+	if ! pkgver_repo=$(pkgver_from_state_repo "${pkgname}" "${repo}-${pkgarch}"); then
 		return 0
 	fi
 
@@ -1141,17 +1140,17 @@ export_from_vcs() {
 
 # Which repo is this package in?
 find_repo_for_package() {
-	local pkgbase=${1}
+	local pkgname=${1}
 	local pkgarch=${2}
 	local candidates=("${@:3}")
 
-	local repos=($(git -C "${GIT_STATE_REPO}" ls-files "*/$pkgbase" | \
+	local repos=($(git -C "${GIT_STATE_REPO}" ls-files "*/$pkgname" | \
 		awk -F/ '{print $1}' | \
 		grep --line-regexp --fixed-strings --file \
 			<(printf "%s\n" "${candidates[@]/%/-${pkgarch}}" "${candidates[@]/%/-any}")))
 
 	if (( ${#repos[@]} > 1 )); then
-		die "%s is present in multiple repos (%s)" "${pkgbase}" "${repos[*]}"
+		die "%s is present in multiple repos (%s)" "${pkgname}" "${repos[*]}"
 	fi
 	(( ${#repos[@]} == 1 )) || return $?
 
@@ -1160,24 +1159,24 @@ find_repo_for_package() {
 
 # Get the current pkgver from a given repo
 pkgver_from_state_repo() {
-	local pkgbase=${1}
+	local pkgname=${1}
 	local repo=${2}
-	property_from_state_repo "${pkgbase}" "${repo}" 2
+	property_from_state_repo "${pkgname}" "${repo}" 2
 }
 
 # Get the current git tag name from a given repo
 gittag_from_state_repo() {
-	local pkgbase=${1}
+	local pkgname=${1}
 	local repo=${2}
-	property_from_state_repo "${pkgbase}" "${repo}" 3
+	property_from_state_repo "${pkgname}" "${repo}" 3
 }
 
 # Get the given property position from a given repo
 property_from_state_repo() {
-	local pkgbase=${1}
+	local pkgname=${1}
 	local repo=${2}
 	local prop=${3}
-	awk '{print $'"${prop}"'}' "${GIT_STATE_REPO}/${repo}/${pkgbase}" 2>/dev/null || return 1
+	awk '{print $'"${prop}"'}' "${GIT_STATE_REPO}/${repo}/${pkgname}" 2>/dev/null || return 1
 }
 
 # Commit changes staged by (successive?) vcs_(re)?move_package runs.
@@ -1220,7 +1219,7 @@ vcs_commit() {
 
 
 vcs_update_package() {
-	local pkgbase="$1"
+	local pkgname="$1"
 	local pkgver="$2"
 	local dest="$3"
 	local gittag
@@ -1233,14 +1232,13 @@ vcs_update_package() {
 
 	mkdir -p "${GIT_STATE_REPO}/${dest}"
 	printf '%s %s %s %s\n' \
-		"${pkgbase}" \
+		"${pkgname}" \
 		"${pkgver}" \
 		"${gittag}" \
-		"$(git -C "${GIT_PACKAGES_CACHE}/${pkgbase}" rev-parse "${gittag}")" \
-		> "${GIT_STATE_REPO}/${dest}/${pkgbase}"
+		> "${GIT_STATE_REPO}/${dest}/${pkgname}"
 
-	git -C "${GIT_STATE_REPO}" add "${GIT_STATE_REPO}/${dest}/${pkgbase}"
-	vcs_commit "update ${pkgbase} to ${pkgver} in ${dest}"
+	git -C "${GIT_STATE_REPO}" add "${GIT_STATE_REPO}/${dest}/${pkgname}"
+	vcs_commit "update ${pkgname} to ${pkgver} in ${dest}"
 
 	unlock "${lock_file}"
 }
@@ -1248,7 +1246,7 @@ vcs_update_package() {
 # Write to the VCS in order to track a package moving between different pacman
 # repositories.
 vcs_move_package() {
-	local pkgbase=${1}
+	local pkgname=${1}
 	local vcsrepo_from=${2}
 	local vcsrepo_to=${3}
 	local lock_file
@@ -1257,8 +1255,8 @@ vcs_move_package() {
 	lock "${lock_file}" "Locking state repo"
 
 	mkdir -p "${GIT_STATE_REPO}/${vcsrepo_to}"
-	git -C "${GIT_STATE_REPO}" mv --force "${vcsrepo_from}/${pkgbase}" "${vcsrepo_to}/${pkgbase}"
-	vcs_commit "move ${pkgbase} from ${vcsrepo_from} to ${vcsrepo_to}"
+	git -C "${GIT_STATE_REPO}" mv --force "${vcsrepo_from}/${pkgname}" "${vcsrepo_to}/${pkgname}"
+	vcs_commit "move ${pkgname} from ${vcsrepo_from} to ${vcsrepo_to}"
 
 	unlock "${lock_file}"
 }
@@ -1266,15 +1264,15 @@ vcs_move_package() {
 # Write to the VCS in order to track a package being deleted from a pacman
 # repository.
 vcs_remove_package() {
-	local pkgbase=${1}
+	local pkgname=${1}
 	local vcsrepo=${2}
 	local lock_file
 
 	lock_file="${GIT_STATE_REPO}/.git/dbscripts.lock"
 	lock "${lock_file}" "Locking state repo"
 
-	git -C "${GIT_STATE_REPO}" rm "${vcsrepo}/${pkgbase}"
-	vcs_commit "remove ${pkgbase} from ${vcsrepo}"
+	git -C "${GIT_STATE_REPO}" rm "${vcsrepo}/${pkgname}"
+	vcs_commit "remove ${pkgname} from ${vcsrepo}"
 
 	unlock "${lock_file}"
 }
