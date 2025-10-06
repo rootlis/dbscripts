@@ -67,42 +67,6 @@ for pkgfile in "${staging_pkgfiles[@]}"; do
 	array_append staging_by_arch "${repo}::${pkgarch}" "${pkgfile}"
 done
 
-# Fetch all pkgbase repositories once
-pkgbases=()
-for repo in "${!staging[@]}"; do
-	for pkgfile in ${staging[$repo]}; do
-		pkgbase=$(getpkgbase "${pkgfile}")
-		if in_array "${pkgbase}" "${pkgbases[@]}"; then
-			continue
-		fi
-		pkgbases+=("${pkgbase}")
-		if ! fetch_pkgbuild "${pkgbase}"; then
-			die "Couldn't find package %s in git!" "${pkgbase}"
-		fi
-	done
-done
-
-# check if version control of staged packages are valid and consistent
-for repo in "${!staging[@]}"; do
-	read -ra pkgs <<< "${staging[$repo]}"
-
-	if ! check_splitpkgs "${repo}" "${pkgs[@]}"; then
-		die "Missing split packages for %s" "$repo"
-	fi
-
-	for pkg in "${pkgs[@]}"; do
-		if ! check_signed_tag "${pkg}"; then
-			die "Package %s does not have a signed tag matching the version" "$repo/${pkg##*/}"
-		fi
-		if ! check_pkgbuild_checksum "${pkg}"; then
-			die "Package %s was not built with the checked in PKGBUILD" "$repo/${pkg##*/}"
-		fi
-		if ! check_pkgvcs "${pkg}" "${repo}"; then
-			die "Package %s is not consistent with data in git repository" "$repo/${pkg##*/}"
-		fi
-	done
-done
-
 
 # TODO: this might lock too much (architectures)
 for repo in "${!staging[@]}"; do
