@@ -112,13 +112,13 @@ for repo in "${!staging[@]}"; do
 			pkgfile="${pkg##*/}"
 
 			# collect metadata the first time we see a pkgfile
-			if [[ ! "${pkgfile_metadata["${pkgfile}::pkgbase"]+exists}" ]]; then
-				if ! pkgbase="$(getpkgbase "${pkg}")" || \
+			if [[ ! "${pkgfile_metadata["${pkgfile}::pkgname"]+exists}" ]]; then
+				if ! pkgname="$(getpkgname "${pkg}")" || \
 						! realpkgarch="$(getpkgarch "${pkg}")" || \
 						! pkgver="$(getpkgver "${pkg}")"; then
 					die "Failed to get metadata from '%s'" "${pkg}"
 				fi
-				pkgfile_metadata["${pkgfile}::pkgbase"]="${pkgbase}"
+				pkgfile_metadata["${pkgfile}::pkgname"]="${pkgname}"
 				pkgfile_metadata["${pkgfile}::arch"]="${realpkgarch}"
 				pkgfile_metadata["${pkgfile}::pkgver"]="${pkgver}"
 				if is_debug_package "${pkg}"; then
@@ -128,13 +128,13 @@ for repo in "${!staging[@]}"; do
 				fi
 			fi
 
-			pkgbase=${pkgfile_metadata["${pkgfile}::pkgbase"]}
+			pkgname=${pkgfile_metadata["${pkgfile}::pkgname"]}
 			realpkgarch=${pkgfile_metadata["${pkgfile}::arch"]}
 			pkgver=${pkgfile_metadata["${pkgfile}::pkgver"]}
-			pkgkey="${pkgbase}::${realpkgarch}"
+			pkgkey="${pkgname}::${realpkgarch}"
 			pkgkeys["${pkgkey}"]="${pkgkey}"
 
-			add_vcspkgs[${pkgkey}::pkgbase]="${pkgbase}"
+			add_vcspkgs[${pkgkey}::pkgname]="${pkgname}"
 			add_vcspkgs[${pkgkey}::pkgver]="${pkgver}"
 			add_vcspkgs[${pkgkey}::arch]="${realpkgarch}"
 
@@ -174,10 +174,10 @@ for repo in "${!staging[@]}"; do
 	done
 	if ((REPO_MODIFIED)); then
 		for pkgkey in "${!pkgkeys[@]}"; do
-			pkgbase="${add_vcspkgs[${pkgkey}::pkgbase]}"
+			pkgname="${add_vcspkgs[${pkgkey}::pkgname]}"
 			pkgver="${add_vcspkgs[${pkgkey}::pkgver]}"
 			pkgarch="${add_vcspkgs[${pkgkey}::arch]}"
-			vcs_update_package "${pkgbase}" "${pkgver}" "${repo}-${pkgarch}"
+			vcs_update_package "${pkgname}" "${pkgver}" "${repo}-${pkgarch}"
 		done
 	fi
 done
