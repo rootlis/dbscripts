@@ -10,17 +10,14 @@ colorize
 
 usage() {
 	cat <<- _EOF_
-	Usage: ${BASH_SOURCE[0]##*/} [OPTIONS] REPO PKGBASE...
+	Usage: ${BASH_SOURCE[0]##*/} [OPTIONS] REPO PKGNAME...
 
 	OPTIONS:
 	    -a, --arch ARCH    Remove packages exclusively from ARCH instead of everywhere
-	    --partial          Remove only specific partial pkgnames from a split package
-	                       This leaves debug packages and pkgbase entries in the state repo
 	    -h, --help         Show this help text
 _EOF_
 }
 
-pkgbase_mode=1
 arch=any
 
 # option checking
@@ -37,12 +34,6 @@ while (( $# )); do
 			if [[ "${arch}" != any ]] && ! in_array "${arch}" "${ARCHES[@]}"; then
 				die "invalid architecture: %s" "${arch}"
 			fi
-			;;
-		--partial)
-			pkgbase_mode=0
-			warning "Removing only partial pkgnames from a split package"
-			warning "This leaves debug packages and pkgbase entries in the state repo"
-			shift
 			;;
 		-*)
 			die "invalid argument: %s" "$1"
@@ -68,14 +59,14 @@ else
 fi
 
 repo="$1"
-pkgbases=("${@:2}")
+pkgnames=("${@:2}")
 # TODO: Temporary compatibility mode for more fluent rollout
 if [[ "$2" == any ]]; then
-	pkgbases=("${@:3}")
+	pkgnames=("${@:3}")
 fi
 
 # filter out duplicates
-mapfile -t pkgbases < <(printf '%s\n' "${pkgbases[@]}" | sort --unique)
+mapfile -t pkgnames < <(printf '%s\n' "${pkgnames[@]}" | sort --unique)
 
 if ! in_array "${repo}" "${PKGREPOS[@]}"; then
 	die "Unknown target repository %s" "${repo}"
@@ -87,47 +78,27 @@ if ! check_author; then
 	die "You don't have a matching author mapping"
 fi
 
-# Fetch all pkgbase repositories once
-if (( pkgbase_mode )); then
-	for pkgbase in "${pkgbases[@]}"; do
-		if ! fetch_pkgbuild "${pkgbase}"; then
-			die "Couldn't find package %s in git!" "${pkgbase}"
-		fi
-	done
-fi
-
 # lock repos
 for tarch in "${tarches[@]}"; do
 	repo_lock "$repo" "$tarch"
 done
 
-declare -A remove_pkgbases
+declare -A remove_pkgnames
 declare -A remove_pkgs
 declare -A remove_debug_pkgs
-declare -A handled_pkgbaes
+declare -A handled_pkgnames
 
-for pkgbase in "${pkgbases[@]}"; do
+for pkgname in "${pkgnames[@]}"; do
 	for tarch in "${vcsarches[@]}"; do
 		vcsrepo="$repo-$tarch"
 
-		# check to remove whole pkgbase or parts of a split package
-		if (( ! pkgbase_mode )); then
-			# check to remove split packages
-			if is_globfile "${FTP_BASE}/${repo}/os/${tarch}/${pkgbase}"-*-*-*.pkg.tar*; then
-				msg "Removing %s from %s [%s]..." "${pkgbase}" "${repo}" "${tarch}"
-				array_append remove_pkgs "${tarch}" "${pkgbase}"
-				handled_pkgbaes["${pkgbase}"]=1
-			fi
+		# try to get pkgname metadata from state repo
+		if ! _pkgver=$(pkgver_from_state_repo "${pkgname}" "${vcsrepo}"); then
 			continue
 		fi
 
-		# try to get pkgbase metadata from state repo
-		if ! _pkgver=$(pkgver_from_state_repo "${pkgbase}" "${vcsrepo}"); then
-			continue
-		fi
-
-		array_append remove_pkgbases "${vcsrepo}" "${pkgbase}"
-		handled_pkgbaes["${pkgbase}"]=1
+		array_append remove_pkgnames "${vcsrepo}" "${pkgname}"
+		handled_pkgnames["${pkgname}"]=1
 
 		# loop through all arches for any packages
 		remove_arches=("${tarch}")
@@ -136,26 +107,25 @@ for pkgbase in "${pkgbases[@]}"; do
 		fi
 
 		# remove pkgnames
-		mapfile -t pkgnames  < <(source_pkgbuild "${pkgbase}" "${_pkgver}" && printf "%s\n" "${pkgname[@]}")
 		for remove_arch in "${remove_arches[@]}"; do
-			msg "Removing %s from %s [%s]..." "${pkgbase}" "${repo}" "${remove_arch}"
+			msg "Removing %s from %s [%s]..." "${pkgname}" "${repo}" "${remove_arch}"
 			array_append remove_pkgs "${remove_arch}" "${pkgnames[*]}"
 		done
 
 		# check to remove debug packages
 		for remove_arch in any "${remove_arches[@]}"; do
-			if is_globfile "${FTP_BASE}/${repo}-debug/os/${remove_arch}/${pkgbase}-debug"-*-*-*.pkg.tar*; then
-				msg "Found debug package. Removing %s from %s [%s]..." "${pkgbase}-debug" "${repo}-debug" "${remove_arch}"
-				array_append remove_debug_pkgs "${remove_arch}" "${pkgbase}-debug"
+			if is_globfile "${FTP_BASE}/${repo}-debug/os/${remove_arch}/${pkgname}-debug"-*-*-*.pkg.tar*; then
+				msg "Found debug package. Removing %s from %s [%s]..." "${pkgname}-debug" "${repo}-debug" "${remove_arch}"
+				array_append remove_debug_pkgs "${remove_arch}" "${pkgname}-debug"
 			fi
 		done
 	done
 done
 
 # check for unhandled arguments before executing
-for pkgbase in "${pkgbases[@]}"; do
-	if [[ ! "${handled_pkgbaes["${pkgbase}"]+exists}" ]]; then
-		die "Package not found in %s: %s" "${repo}" "${pkgbase}"
+for pkgname in "${pkgnames[@]}"; do
+	if [[ ! "${handled_pkgnames["${pkgname}"]+exists}" ]]; then
+		die "Package not found in %s: %s" "${repo}" "${pkgname}"
 	fi
 done
 
@@ -174,11 +144,11 @@ for key in "${!remove_debug_pkgs[@]}"; do
 done
 
 # remove state repo entry
-for key in "${!remove_pkgbases[@]}"; do
+for key in "${!remove_pkgnames[@]}"; do
 	vcsrepo=${key}
-	read -ra pkgs <<< "${remove_pkgbases[$key]}"
-	for pkgbase in "${pkgs[@]}"; do
-		vcs_remove_package "${pkgbase}" "${vcsrepo}"
+	read -ra pkgs <<< "${remove_pkgnames[$key]}"
+	for pkgname in "${pkgs[@]}"; do
+		vcs_remove_package "${pkgname}" "${vcsrepo}"
 	done
 done
 
