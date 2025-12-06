@@ -62,7 +62,7 @@ RUN rsop generate-key "Bob Tester <tester@localhost>" > /build/private.tsk && \
 	printf "create ~/.gnupg dir for tester user as otherwise keyboxd is used (which breaks using pacman-key)\n" && \
 	mkdir -vp /build/.gnupg && \
 	sudo sh -c 'printf "# this option is only needed due to a regression in pacman 6.1\nlock-never\n" >> /etc/pacman.d/gnupg/gpg.conf' && \
-	gpg --import /build/private.tsk && \
+	gpg --batch --import /build/private.tsk && \
 	gpgconf --kill gpg-agent && \
 	gpgconf --kill keyboxd && \
 	mkdir -p \
