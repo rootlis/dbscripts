@@ -1,4 +1,15 @@
 # Arch Linux repository management scripts
+
+## Branch-specific note: PacBrew Compatibility
+This work-in-progress fork of `dbscripts` is modified for use with
+ps5-payload-dev's
+[pacbrew-repo](https://github.com/ps5-payload-dev/pacbrew-repo) PKGBUILD
+repository. The broader goal is a minimally-patched Arch `dbscripts`
+compatible with a minimally-patched Arch `devtools` that can be used for
+self-hosted Pacman repositories.
+
+Below continues upstream's README.
+
 ## Configuration
 * The default configuration can be found in `config`.
 * An optional `config.local` may override the default configuration.
