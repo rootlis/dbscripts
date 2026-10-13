@@ -109,7 +109,7 @@ for pkgname in "${pkgnames[@]}"; do
 		# remove pkgnames
 		for remove_arch in "${remove_arches[@]}"; do
 			msg "Removing %s from %s [%s]..." "${pkgname}" "${repo}" "${remove_arch}"
-			array_append remove_pkgs "${remove_arch}" "${pkgnames[*]}"
+			array_append remove_pkgs "${remove_arch}" "${pkgname}"
 		done
 
 		# check to remove debug packages
